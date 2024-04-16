@@ -6,7 +6,7 @@ export function onMatchAccept(game: Game, player: Player, matchedPlayer: Player)
     console.log("match Accept")
     if (matchedPlayer.accept === true) {
       player.accept = true;
-      const roomId = game.createGameRoom(matchedPlayer, player);
+      game.createGameRoom(matchedPlayer, player);
     } else {
       player.accept = true;
     }
@@ -57,18 +57,24 @@ export function onPlayerReady(roomID: string, characters: Array<Character>, play
 export function onPlayerAction(room: GameRoom, player: Player, matchedPlayer: Player) {
   return (actionData: { action: "ask" | "guess", message: string | undefined, characterId: number | undefined }) => {
     console.log(actionData)
+    if (!player.isMyTurn) return;
     if (actionData.action === "ask") {
       console.log(actionData.message)
       room.chatHistory.push({ message: actionData.message, playerId: player.socket.id })
       const chatHistoryProccesed = processChatHistory(room.chatHistory, matchedPlayer.socket.id)
+      player.isMyTurn = false;
+      player.asking = true;
       matchedPlayer.socket.emit("playerAsk", chatHistoryProccesed)
     } else if (actionData.action === "guess") {
       console.log(actionData.characterId)
+      player.isMyTurn = false;
+      player.asking = false;
       if (matchedPlayer.characterID === actionData.characterId) {
         player.socket.emit("guessResult", true)
         matchedPlayer.socket.emit("youLose")
       } else {
         player.socket.emit("guessResult", false)
+        matchedPlayer.isMyTurn = true;
         matchedPlayer.socket.emit("yourTurn", true)
       }
     }
@@ -77,9 +83,12 @@ export function onPlayerAction(room: GameRoom, player: Player, matchedPlayer: Pl
 
 export function onPlayerAnswer(room: GameRoom, player: Player, matchedPlayer: Player) {
   return (message: string) => {
+    if (!matchedPlayer.asking) return;
     room.chatHistory.push({ message, playerId: player.socket.id })
     const chatHistoryProcessed = processChatHistory(room.chatHistory, matchedPlayer.socket.id)
     matchedPlayer.socket.emit("opponentAnswer", chatHistoryProcessed);
+    player.isMyTurn = true;
+    matchedPlayer.asking = false;
     player.socket.emit("yourTurn", false);
   };
 }
