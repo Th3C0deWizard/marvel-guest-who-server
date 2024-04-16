@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import type { BroadcastOperator, ServerOptions, Socket } from "socket.io";
-import { onPlayerReady } from "./eventHandlers";
+import { onPlayerAction, onPlayerAnswer, onPlayerReady } from "./eventHandlers";
 
 export interface Character {
   id: number;
@@ -9,6 +9,11 @@ export interface Character {
     path: string;
     extension: string;
   };
+}
+
+export interface ChatMessage {
+  message: string;
+  playerId: string;
 }
 
 export class Player {
@@ -36,6 +41,7 @@ export class GameRoom {
   readonly player2: Player;
   readonly gamesToWin: number;
   characters: Array<Character>;
+  chatHistory: Array<ChatMessage>;
 
   constructor(
     id: string,
@@ -48,6 +54,7 @@ export class GameRoom {
     this.player2 = player2;
     this.gamesToWin = gamesToWin;
     this.characters = [];
+    this.chatHistory = [];
   }
 
   handleEvents(server: Server): void {
@@ -57,14 +64,19 @@ export class GameRoom {
     this.player2.socket.on("disconnect", () =>
       this.player1.socket.disconnect()
     );
+    this.player1.socket.on("playerAction", onPlayerAction(this, this.player1, this.player2))
+    this.player2.socket.on("playerAction", onPlayerAction(this, this.player2, this.player1))
+    this.player1.socket.on("playerAnswer", onPlayerAnswer(this, this.player1, this.player2))
+    this.player2.socket.on("playerAnswer", onPlayerAnswer(this, this.player2, this.player1))
+
   }
 
   async initGame(server: Server) {
     const offset: number = Math.floor(Math.random() * 30) * 50;
     const response = await fetch(
       "https://gateway.marvel.com//v1/public/characters?ts=1&apikey=95d22bad7531c452ae4f5c1ac9bae9ce&hash=1ea8bd47f0bb37318aeb0e21e3af9950&limit=100" +
-        "&offset=" +
-        offset
+      "&offset=" +
+      offset
     );
     const data = await response.json();
     let characters = data.data.results.map((character): Character => {
